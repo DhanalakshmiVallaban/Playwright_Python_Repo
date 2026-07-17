@@ -1,0 +1,60 @@
+name: Playwright Tests (Python)
+
+on:
+  schedule:
+    # Runs at 2:30 AM UTC = 8:00 AM IST, every day
+    - cron: '30 2 * * *'
+  workflow_dispatch: {}   # allows manual trigger from Actions tab
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: pytest --html=report/report.html --self-contained-html
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: report/
+          retention-days: 14
+
+      - name: Email report to team
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com      # change if not using Gmail
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Playwright CI <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ secrets.MAIL_RECIPIENTS }}   # comma-separated list, e.g. a@x.com,b@x.com
+          subject: "Playwright Python Report - ${{ job.status }} - ${{ github.run_id }}"
+          body: |
+            Daily Playwright (Python) test run finished with status: ${{ job.status }}
+
+            Download the full HTML report here (scroll to "Artifacts" section):
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
